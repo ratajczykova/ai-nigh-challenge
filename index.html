@@ -1,35 +1,26 @@
 <!DOCTYPE html>
 <html>
 <head>
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
     <script src="https://cdn.jsdelivr.net/gh/hiukim/mind-ar-js@1.2.2/dist/mindar-image-three.prod.js"></script>
     <style>
-        body { margin: 0; overflow: hidden; font-family: 'Segoe UI', sans-serif; }
-        /* Game UI */
-        #ui-layer { position: absolute; top: 20px; left: 20px; z-index: 100; color: #00F2FF; text-shadow: 2px 2px #000; }
-        #score-val { font-size: 40px; font-weight: bold; }
+        /* This forces the camera feed to stay visible regardless of phone brand */
+        body { margin: 0; overflow: hidden; background-color: transparent; }
+        canvas { position: absolute; top: 0; left: 0; z-index: 2; }
+        video { position: absolute; top: 0; left: 0; z-index: 1; width: 100vw !important; height: 100vh !important; object-fit: cover; }
         
-        /* Trivia Popup */
-        #trivia-box { 
-            display: none; position: absolute; bottom: 15%; left: 50%; 
-            transform: translateX(-50%); background: rgba(20, 20, 20, 0.9); 
-            color: white; padding: 25px; border-radius: 20px; border: 2px solid #7B4BB1;
-            text-align: center; width: 80%; z-index: 100;
-        }
-        .btn { 
-            background: #7B4BB1; color: white; border: none; padding: 12px 25px; 
-            margin: 10px; border-radius: 8px; font-size: 16px; font-weight: bold;
-        }
+        #ui { position: absolute; top: 20px; left: 20px; z-index: 100; color: #00F2FF; font-size: 24px; text-shadow: 2px 2px #000; }
+        #trivia { display: none; position: absolute; bottom: 15%; left: 50%; transform: translateX(-50%); background: rgba(0,0,0,0.85); color: white; padding: 20px; border-radius: 15px; text-align: center; z-index: 100; width: 80%; border: 2px solid #7B4BB1; }
+        button { background: #7B4BB1; color: white; border: none; padding: 12px 25px; margin: 10px; border-radius: 8px; font-weight: bold; }
     </style>
 </head>
 <body>
-    <div id="ui-layer">POINTS: <span id="score-val">0</span></div>
-    
-    <div id="trivia-box">
-        <h2 style="color: #00F2FF; margin-top: 0;">EKO CHALLENGE!</h2>
-        <p>What color did you paint EKO's jacket?</p>
-        <button class="btn" onclick="checkAns(true)">PURPLE</button>
-        <button class="btn" onclick="checkAns(false)">RED</button>
+    <div id="ui">POINTS: <span id="score">0</span></div>
+    <div id="trivia">
+        <h3>EKO CHALLENGE</h3>
+        <p>What color is EKO's jacket?</p>
+        <button onclick="ans(true)">PURPLE</button>
+        <button onclick="ans(false)">GREEN</button>
     </div>
 
     <script type="module">
@@ -37,59 +28,53 @@
         import {GLTFLoader} from 'https://unpkg.com/three@0.139.2/examples/jsm/loaders/GLTFLoader.js';
 
         let score = 0;
-        let mixer; // Animation controller
-        let danceAction;
+        let mixer;
 
         const mindarThree = new window.MINDAR.IMAGE.MindARThree({
             container: document.body,
             imageTargetSrc: './targets.mind',
+            uiLoading: "no", // Disables the initial white loading screen
+            uiScanning: "no"
         });
 
         const {renderer, scene, camera} = mindarThree;
+        // Optimization: Makes the 3D scene background transparent so camera shows through
+        renderer.setClearColor(0x000000, 0); 
+        
         const anchor = mindarThree.addAnchor(0);
-
-        // Add Light so EKO looks good
-        const light = new THREE.HemisphereLight(0xffffff, 0xbbbbff, 1);
-        scene.add(light);
-
-        // Load your Custom Colored & Animated Model
         const loader = new GLTFLoader();
+
         loader.load('./eko_dance.glb', (gltf) => {
             const model = gltf.scene;
-            model.scale.set(0.5, 0.5, 0.5); // Adjust size if needed
-            model.rotation.set(Math.PI/2, 0, 0); // Fix orientation
+            model.scale.set(0.5, 0.5, 0.5);
+            model.rotation.set(Math.PI/2, 0, 0);
             anchor.group.add(model);
 
-            // Set up the Animation from Mixamo
             mixer = new THREE.AnimationMixer(model);
-            danceAction = mixer.clipAction(gltf.animations[0]);
+            const dance = mixer.clipAction(gltf.animations[0]);
 
-            // DETECTION LOGIC
             anchor.onTargetFound = () => {
-                if (score === 0) { // Only show trivia on first scan
-                    score += 5; 
-                    document.getElementById('score-val').innerText = score;
-                    document.getElementById('trivia-box').style.display = 'block';
+                if(score === 0) {
+                    score = 5;
+                    document.getElementById('score').innerText = score;
+                    document.getElementById('trivia').style.display = 'block';
                 }
+            };
+
+            window.ans = (correct) => {
+                if(correct) {
+                    score += 15;
+                    dance.play();
+                }
+                document.getElementById('score').innerText = score;
+                document.getElementById('trivia').style.display = 'none';
             };
         });
 
-        // TRIVIA LOGIC
-        window.checkAns = (isCorrect) => {
-            if(isCorrect) {
-                score += 15;
-                document.getElementById('score-val').innerText = score;
-                danceAction.play(); // EKO STARTS DANCING!
-            }
-            document.getElementById('trivia-box').style.display = 'none';
-        }
-
-        // START ENGINE
-        const start = async() => {
+        const start = async () => {
             await mindarThree.start();
             renderer.setAnimationLoop(() => {
-                const delta = 0.016; // Approx 60fps
-                if (mixer) mixer.update(delta);
+                if (mixer) mixer.update(0.016);
                 renderer.render(scene, camera);
             });
         }
