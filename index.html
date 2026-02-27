@@ -6,38 +6,39 @@
     <script src="https://cdn.jsdelivr.net/npm/mind-ar@1.2.5/dist/mindar-image-aframe.prod.js"></script>
     <script src="https://cdn.jsdelivr.net/gh/donmccurdy/aframe-extras@v7.0.0/dist/aframe-extras.min.js"></script>
     <style>
-        /* Force full screen to kill the "White Half" issue */
         body, html { margin: 0; padding: 0; width: 100%; height: 100%; overflow: hidden; background: #000; }
-        #gui { position: absolute; top: 15px; left: 15px; z-index: 1000; color: #00FF00; font-family: monospace; font-size: 20px; }
-        
+        #gui { position: absolute; top: 10px; left: 10px; z-index: 1000; color: #00FF00; font-family: monospace; font-size: 18px; background: rgba(0,0,0,0.5); padding: 5px; border-radius: 5px; }
         #trivia-card { 
-            display: none; position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%);
-            background: rgba(0,0,0,0.95); border: 2px solid #00FF00; padding: 20px; width: 85%;
-            text-align: center; color: white; z-index: 2000; border-radius: 10px;
+            display: none; position: absolute; top: 40%; left: 50%; transform: translate(-50%, -50%);
+            background: rgba(0,0,0,0.95); border: 2px solid #00FF00; padding: 20px; width: 80%;
+            text-align: center; color: white; z-index: 2000; border-radius: 15px;
         }
-        .controls { position: absolute; bottom: 30px; width: 100%; display: flex; justify-content: center; gap: 8px; z-index: 1000; }
-        button { background: #000; color: #00FF00; border: 1px solid #00FF00; padding: 12px; font-weight: bold; cursor: pointer; }
-        /* Fixes the MindAR UI overlay that causes white bars */
-        .mindar-ui-overlay { display: none !important; }
+        .controls { position: absolute; bottom: 40px; width: 100%; display: flex; justify-content: center; gap: 10px; z-index: 1000; }
+        button { background: #111; color: #00FF00; border: 1px solid #00FF00; padding: 12px; font-weight: bold; border-radius: 8px; cursor: pointer; }
+        .mindar-ui-overlay, .mindar-ui-scanning { display: none !important; }
     </style>
 </head>
 <body>
 
-    <div id="gui">SCORE: <span id="score">0</span> | STREAK: <span id="streak">0</span></div>
+    <div id="gui">
+        SCORE: <span id="score">0</span><br>
+        STREAK: <span id="streak">0</span>
+    </div>
 
     <div id="trivia-card">
-        <h3 id="q-text">TARGET FOUND!</h3>
+        <h3 id="q-text">TARGET DETECTED!</h3>
         <div id="options"></div>
     </div>
 
     <div class="controls">
-        <button onclick="playAnim()">DANCE (+5)</button>
+        <button onclick="playAction('dance')">DANCE (+5)</button>
+        <button onclick="playAction('wave')">WAVE (+5)</button>
         <button onclick="takePhoto()" style="background: #00FF00; color: #000;">PHOTO (+15)</button>
     </div>
 
     <a-scene mindar-image="imageTargetSrc: ./targets.mind; autoStart: true; uiLoading: no; uiError: no; uiScanning: no;" 
              embedded vr-mode-ui="enabled: false" device-orientation-permission-ui="enabled: false"
-             renderer="preserveDrawingBuffer: true; antialias: true; alpha: true;">
+             renderer="preserveDrawingBuffer: true; alpha: true;">
         
         <a-assets>
             <a-asset-item id="ekoModel" src="eko_dance.glb"></a-asset-item>
@@ -47,7 +48,7 @@
 
         <a-entity id="eko-anchor" mindar-image-target="targetIndex: 0">
             <a-gltf-model id="eko-mesh" src="#ekoModel" 
-                          position="0 0 0" rotation="90 0 0" scale="1 1 1" 
+                          position="0 0 0" rotation="90 0 0" scale="1.2 1.2 1.2" 
                           animation-mixer="clip: *; loop: repeat; timeScale: 0;">
             </a-gltf-model>
         </a-entity>
@@ -55,29 +56,30 @@
 
     <script>
         let score = 0, streak = 0, qIdx = 0;
-        const questions = [
-            { q: "What color is EKO's jacket?", o: ["Purple", "Red"], r: 0 },
-            { q: "Is EKO 3D or 2D?", o: ["2D", "3D"], r: 1 }
+        const quiz = [
+            { q: "What color is EKO's jacket?", o: ["Purple", "Yellow"], r: 0 },
+            { q: "What's EKO's specialty?", o: ["Web3 AR", "Cooking"], r: 0 },
+            { q: "Did you like this challenge?", o: ["Yes", "Hell Yes"], r: "any" }
         ];
 
         const anchor = document.querySelector('#eko-anchor');
         const ekoMesh = document.querySelector('#eko-mesh');
         const trivia = document.getElementById('trivia-card');
 
-        // Logic: On Found
+        // Target Found: +5 Pts + Delay Trivia
         anchor.addEventListener("targetFound", () => {
-            score += 5;
-            updateUI();
-            // 2 Second delay for gamification
-            setTimeout(() => {
-                if(qIdx < questions.length) {
-                    showQuestion();
-                }
-            }, 2000);
+            if(qIdx === 0) {
+                score += 5; updateUI();
+                setTimeout(showQuestion, 2000);
+            }
         });
 
         function showQuestion() {
-            const data = questions[qIdx];
+            if (qIdx >= quiz.length) {
+                trivia.innerHTML = "<h3>ALL CHALLENGES COMPLETE!</h3><p>Take a photo to finish!</p>";
+                return;
+            }
+            const data = quiz[qIdx];
             document.getElementById('q-text').innerText = data.q;
             document.getElementById('options').innerHTML = data.o.map((opt, i) => 
                 `<button style="width:100%; margin: 5px 0;" onclick="checkAns(${i})">${opt}</button>`).join('');
@@ -85,29 +87,35 @@
         }
 
         window.checkAns = (i) => {
-            if(i === questions[qIdx].r) {
-                score += 10; streak++;
-                qIdx++;
+            const data = quiz[qIdx];
+            if(i === data.r || data.r === "any") {
+                score += 10; streak++; qIdx++;
                 trivia.style.display = 'none';
-                // Trigger dance on correct answer
-                ekoMesh.setAttribute('animation-mixer', 'timeScale: 1');
+                playAction('dance'); // Play dance on success
+                setTimeout(showQuestion, 3000); // Show next question after 3 secs
             } else {
                 streak = 0;
-                alert("Wrong! Streak Reset.");
+                alert("STREAK RESET! Try again.");
             }
             updateUI();
         };
 
-        window.playAnim = () => {
+        window.playAction = (type) => {
             score += 5;
-            ekoMesh.setAttribute('animation-mixer', 'timeScale: 1');
+            if(type === 'dance') {
+                ekoMesh.setAttribute('animation-mixer', 'timeScale: 1; loop: repeat');
+            } else {
+                // Faking a 'Wave' by playing the first half of the dance quickly
+                ekoMesh.setAttribute('animation-mixer', 'timeScale: 2; loop: once');
+                setTimeout(() => { ekoMesh.setAttribute('animation-mixer', 'timeScale: 0'); }, 1000);
+            }
             updateUI();
         };
 
         window.takePhoto = () => {
             const canvas = document.querySelector('a-scene').components.screenshot.getCanvas('perspective');
             const link = document.createElement('a');
-            link.download = 'eko_capture.png';
+            link.download = 'eko_ar_win.png';
             link.href = canvas.toDataURL('image/png');
             link.click();
             score += 15;
