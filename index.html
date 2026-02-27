@@ -5,21 +5,22 @@
     <script src="https://aframe.io/releases/1.5.0/aframe.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/mind-ar@1.2.5/dist/mindar-image-aframe.prod.js"></script>
     <script src="https://cdn.jsdelivr.net/gh/donmccurdy/aframe-extras@v7.0.0/dist/aframe-extras.min.js"></script>
-    
     <style>
-        #ui { position: absolute; top: 20px; left: 20px; z-index: 999; color: #00F2FF; font-family: sans-serif; font-size: 24px; text-shadow: 2px 2px #000; }
-        #trivia { display: none; position: absolute; bottom: 15%; left: 50%; transform: translateX(-50%); background: rgba(10,10,10,0.95); color: white; padding: 25px; border-radius: 20px; text-align: center; z-index: 999; width: 85%; border: 3px solid #7B4BB1; box-shadow: 0 0 20px #7B4BB1; }
-        .btn { background: #7B4BB1; color: white; border: none; padding: 15px 20px; margin: 10px; border-radius: 10px; font-weight: bold; width: 120px; font-size: 16px; cursor: pointer; }
-        .btn:active { background: #00F2FF; color: black; }
+        #ui { position: absolute; top: 20px; left: 20px; z-index: 1000; color: #00F2FF; font-family: sans-serif; font-size: 24px; text-shadow: 2px 2px #000; }
+        #trivia-container { 
+            display: none; position: absolute; bottom: 15%; left: 50%; transform: translateX(-50%); 
+            background: rgba(0,0,0,0.9); color: white; padding: 20px; border-radius: 15px; 
+            text-align: center; z-index: 1000; width: 85%; border: 2px solid #7B4BB1; 
+        }
+        .btn { background: #7B4BB1; color: white; border: none; padding: 12px 20px; margin: 10px; border-radius: 8px; font-weight: bold; cursor: pointer; min-width: 100px; }
     </style>
 </head>
 <body>
-    <div id="ui">POINTS: <span id="score">0</span></div>
+    <div id="ui">POINTS: <span id="score-text">0</span></div>
     
-    <div id="trivia">
-        <h3 id="question-text">EKO TRIVIA</h3>
-        <div id="options">
-            </div>
+    <div id="trivia-container">
+        <h3 id="q-text">Loading Trivia...</h3>
+        <div id="btn-group"></div>
     </div>
 
     <a-scene mindar-image="imageTargetSrc: ./targets.mind; autoStart: true; uiLoading: no;" color-space="sRGB" renderer="colorManagement: true, physicallyCorrectLights" vr-mode-ui="enabled: false" device-orientation-permission-ui="enabled: false">
@@ -30,61 +31,56 @@
         <a-camera position="0 0 0" look-controls="enabled: false"></a-camera>
 
         <a-entity id="eko-anchor" mindar-image-target="targetIndex: 0">
-            <a-gltf-model id="eko-model" src="#ekoModel" rotation="90 0 0" position="0 0 0" scale="0.6 0.6 0.6" animation-mixer="clip: *; loop: repeat; timeScale: 0;"></a-gltf-model>
+            <a-gltf-model id="eko-obj" src="#ekoModel" rotation="90 0 0" position="0 0 0" scale="0.5 0.5 0.5" animation-mixer="clip: *; loop: repeat;"></a-gltf-model>
         </a-entity>
     </a-scene>
 
     <script>
-        let score = 0;
-        let currentQuestion = 0;
+        let currentScore = 0;
+        let qIndex = 0;
         
-        const questions = [
-            { q: "What color is EKO's jacket?", a: "Purple", b: "Blue", correct: "a" },
-            { q: "What is EKO doing?", a: "Sleeping", b: "Dancing", correct: "b" },
-            { q: "Is EKO the best mascot?", a: "Yes", b: "Absolutely", correct: "any" }
+        const quiz = [
+            { q: "What color is EKO's jacket?", options: ["Purple", "Green"], correct: 0 },
+            { q: "What is EKO doing?", options: ["Sleeping", "Dancing"], correct: 1 },
+            { q: "EKO is built for...", options: ["Web3", "Cooking"], correct: 0 }
         ];
 
-        const anchorEl = document.querySelector('#eko-anchor');
-        const modelEl = document.querySelector('#eko-model');
+        const anchor = document.querySelector('#eko-anchor');
+        const triviaBox = document.getElementById('trivia-container');
 
-        // Logic for showing questions
-        function showQuestion() {
-            if (currentQuestion >= questions.length) {
-                document.getElementById('question-text').innerText = "CHALLENGE COMPLETE!";
-                document.getElementById('options').innerHTML = "";
+        function loadQuestion() {
+            if (qIndex >= quiz.length) {
+                document.getElementById('q-text').innerText = "ALL QUESTIONS CLEARED!";
+                document.getElementById('btn-group').innerHTML = "";
                 return;
             }
             
-            const q = questions[currentQuestion];
-            document.getElementById('question-text').innerText = q.q;
-            document.getElementById('options').innerHTML = `
-                <button class="btn" onclick="checkAns('a')">${q.a}</button>
-                <button class="btn" onclick="checkAns('b')">${q.b}</button>
-            `;
-            document.getElementById('trivia').style.display = 'block';
+            const data = quiz[qIndex];
+            document.getElementById('q-text').innerText = data.q;
+            let html = "";
+            data.options.forEach((opt, i) => {
+                html += `<button class="btn" onclick="handleAns(${i})">${opt}</button>`;
+            });
+            document.getElementById('btn-group').innerHTML = html;
+            triviaBox.style.display = 'block';
         }
 
-        anchorEl.addEventListener("targetFound", () => {
-            if(score === 0) showQuestion();
+        anchor.addEventListener("targetFound", () => {
+            if(qIndex === 0 && triviaBox.style.display === 'none') {
+                loadQuestion();
+            }
         });
 
-        window.checkAns = (choice) => {
-            const q = questions[currentQuestion];
-            if(choice === q.correct || q.correct === "any") {
-                score += 20;
-                document.getElementById('score').innerText = score;
-                
-                // TRIGGER ANIMATION: Set timeScale to 1 to start the dance
-                modelEl.setAttribute('animation-mixer', 'timeScale: 1');
-                
-                // Move to next question after 2 seconds
-                currentQuestion++;
-                document.getElementById('trivia').style.display = 'none';
-                setTimeout(showQuestion, 2000);
+        window.handleAns = (idx) => {
+            if(idx === quiz[qIndex].correct) {
+                currentScore += 50;
+                document.getElementById('score-text').innerText = currentScore;
+                qIndex++;
+                loadQuestion();
             } else {
-                alert("Try again!");
+                alert("Wrong! Try again.");
             }
-        }
+        };
     </script>
 </body>
 </html>
