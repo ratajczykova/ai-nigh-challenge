@@ -1,0 +1,99 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <script src="https://cdn.jsdelivr.net/gh/hiukim/mind-ar-js@1.2.2/dist/mindar-image-three.prod.js"></script>
+    <style>
+        body { margin: 0; overflow: hidden; font-family: 'Segoe UI', sans-serif; }
+        /* Game UI */
+        #ui-layer { position: absolute; top: 20px; left: 20px; z-index: 100; color: #00F2FF; text-shadow: 2px 2px #000; }
+        #score-val { font-size: 40px; font-weight: bold; }
+        
+        /* Trivia Popup */
+        #trivia-box { 
+            display: none; position: absolute; bottom: 15%; left: 50%; 
+            transform: translateX(-50%); background: rgba(20, 20, 20, 0.9); 
+            color: white; padding: 25px; border-radius: 20px; border: 2px solid #7B4BB1;
+            text-align: center; width: 80%; z-index: 100;
+        }
+        .btn { 
+            background: #7B4BB1; color: white; border: none; padding: 12px 25px; 
+            margin: 10px; border-radius: 8px; font-size: 16px; font-weight: bold;
+        }
+    </style>
+</head>
+<body>
+    <div id="ui-layer">POINTS: <span id="score-val">0</span></div>
+    
+    <div id="trivia-box">
+        <h2 style="color: #00F2FF; margin-top: 0;">EKO CHALLENGE!</h2>
+        <p>What color did you paint EKO's jacket?</p>
+        <button class="btn" onclick="checkAns(true)">PURPLE</button>
+        <button class="btn" onclick="checkAns(false)">RED</button>
+    </div>
+
+    <script type="module">
+        import * as THREE from 'https://unpkg.com/three@0.139.2/build/three.module.js';
+        import {GLTFLoader} from 'https://unpkg.com/three@0.139.2/examples/jsm/loaders/GLTFLoader.js';
+
+        let score = 0;
+        let mixer; // Animation controller
+        let danceAction;
+
+        const mindarThree = new window.MINDAR.IMAGE.MindARThree({
+            container: document.body,
+            imageTargetSrc: './targets.mind',
+        });
+
+        const {renderer, scene, camera} = mindarThree;
+        const anchor = mindarThree.addAnchor(0);
+
+        // Add Light so EKO looks good
+        const light = new THREE.HemisphereLight(0xffffff, 0xbbbbff, 1);
+        scene.add(light);
+
+        // Load your Custom Colored & Animated Model
+        const loader = new GLTFLoader();
+        loader.load('./eko_dance.glb', (gltf) => {
+            const model = gltf.scene;
+            model.scale.set(0.5, 0.5, 0.5); // Adjust size if needed
+            model.rotation.set(Math.PI/2, 0, 0); // Fix orientation
+            anchor.group.add(model);
+
+            // Set up the Animation from Mixamo
+            mixer = new THREE.AnimationMixer(model);
+            danceAction = mixer.clipAction(gltf.animations[0]);
+
+            // DETECTION LOGIC
+            anchor.onTargetFound = () => {
+                if (score === 0) { // Only show trivia on first scan
+                    score += 5; 
+                    document.getElementById('score-val').innerText = score;
+                    document.getElementById('trivia-box').style.display = 'block';
+                }
+            };
+        });
+
+        // TRIVIA LOGIC
+        window.checkAns = (isCorrect) => {
+            if(isCorrect) {
+                score += 15;
+                document.getElementById('score-val').innerText = score;
+                danceAction.play(); // EKO STARTS DANCING!
+            }
+            document.getElementById('trivia-box').style.display = 'none';
+        }
+
+        // START ENGINE
+        const start = async() => {
+            await mindarThree.start();
+            renderer.setAnimationLoop(() => {
+                const delta = 0.016; // Approx 60fps
+                if (mixer) mixer.update(delta);
+                renderer.render(scene, camera);
+            });
+        }
+        start();
+    </script>
+</body>
+</html>
